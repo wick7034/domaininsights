@@ -25,6 +25,7 @@ export default function App() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [tlds, setTlds] = useState<string[]>(['ai', 'app', 'com', 'io', 'net', 'org', 'xyz']);
   const [loading, setLoading] = useState(true);
+  const [domainsError, setDomainsError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -32,6 +33,10 @@ export default function App() {
   const fetchTlds = async () => {
     try {
       const res = await fetch('/api/tlds');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: `Server error: ${res.status}` }));
+        throw new Error(errorData.error || `Server error: ${res.status}`);
+      }
       const data = await res.json();
       if (Array.isArray(data)) {
         // Merge fetched TLDs with our core set to ensure all requested are present
@@ -46,6 +51,7 @@ export default function App() {
 
   const fetchDomains = useCallback(async (currentFilters: FilterState, currentPage: number) => {
     setLoading(true);
+    setDomainsError(null);
     try {
       const params = new URLSearchParams();
       params.append('page', currentPage.toString());
@@ -63,6 +69,10 @@ export default function App() {
       params.append('sortOrder', currentFilters.sortOrder);
 
       const res = await fetch(`/api/domains?${params.toString()}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: `Server error: ${res.status}` }));
+        throw new Error(errorData.error || `Server error: ${res.status}`);
+      }
       const { data, count } = await res.json();
       
       if (currentPage === 0) {
@@ -71,8 +81,13 @@ export default function App() {
         setDomains(prev => [...prev, ...(data || [])]);
       }
       setTotalCount(count || 0);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch domains:', err);
+      setDomainsError(err.message || 'Failed to connect to the server');
+      if (currentPage === 0) {
+        setDomains([]);
+        setTotalCount(0);
+      }
     } finally {
       setLoading(false);
     }
@@ -129,6 +144,12 @@ export default function App() {
             </div>
 
             <div className="mt-6">
+              {domainsError && (
+                <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {domainsError}
+                </div>
+              )}
+
               <div className="mb-4 flex items-center justify-between">
                 <div className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
                   {loading ? 'Updating results...' : `${totalCount.toLocaleString()} Domains Found`}

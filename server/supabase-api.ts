@@ -16,13 +16,50 @@ type AnalyticsRow = {
 
 let supabaseClient: ReturnType<typeof createClient> | null = null;
 
+function sanitizeEnvValue(value?: string) {
+  if (!value) return "";
+
+  const trimmedValue = value.trim();
+  if (
+    trimmedValue.length >= 2 &&
+    ((trimmedValue.startsWith('"') && trimmedValue.endsWith('"')) ||
+      (trimmedValue.startsWith("'") && trimmedValue.endsWith("'")))
+  ) {
+    return trimmedValue.slice(1, -1).trim();
+  }
+
+  return trimmedValue;
+}
+
+function getFirstEnvValue(keys: string[]) {
+  for (const key of keys) {
+    const value = sanitizeEnvValue(process.env[key]);
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
 function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || "";
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
+  const supabaseUrl = getFirstEnvValue([
+    "SUPABASE_URL",
+    "VITE_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_URL",
+  ]);
+  const supabaseAnonKey = getFirstEnvValue([
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "VITE_SUPABASE_ANON_KEY",
+    "VITE_SUPABASE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+  ]);
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
-      "Missing SUPABASE_URL or SUPABASE_ANON_KEY. Set them locally and in your deployment platform settings.",
+      "Missing Supabase environment variables. Set SUPABASE_URL and SUPABASE_ANON_KEY in the deployment settings, and do not wrap dashboard values in quotes.",
     );
   }
 

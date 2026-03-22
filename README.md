@@ -26,6 +26,7 @@ The local dev server runs `server.ts`, which serves the React app and exposes `/
 3. Add `SUPABASE_URL` and `SUPABASE_ANON_KEY` in Project Settings -> Environment Variables
 
 The `api/` folder provides Vercel serverless functions for the existing `/api/*` endpoints.
+Do not include quote characters around the values in the Vercel dashboard.
 
 ### Netlify
 
@@ -35,3 +36,4 @@ The `api/` folder provides Vercel serverless functions for the existing `/api/*`
 4. Add `SUPABASE_URL` and `SUPABASE_ANON_KEY` in Site Settings -> Environment Variables
 
 `netlify.toml` rewrites `/api/*` requests to Netlify Functions and keeps SPA routing working.
+Do not include quote characters around the values in the Netlify dashboard.
