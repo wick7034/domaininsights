@@ -4,6 +4,7 @@ import {
   PieChart, Pie, Cell, Legend 
 } from 'recharts';
 import { Calendar, TrendingUp, Globe, Hash } from 'lucide-react';
+import { NewAnalyticsSection } from './analytics/NewAnalyticsSection';
 
 const COLORS = ['#f43f5e', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#14b8a6', '#f97316', '#84cc16'];
 
@@ -42,6 +43,7 @@ export const Analytics: React.FC = () => {
         const params = new URLSearchParams();
         params.append('period', period);
         if (selectedTld) params.append('tld', selectedTld);
+        params.append('intelligenceVersion', '2');
 
         const res = await fetch(`/api/analytics?${params.toString()}`);
         if (!res.ok) {
@@ -236,6 +238,10 @@ export const Analytics: React.FC = () => {
                 )}
               </div>
             </div>
+          </div>
+
+          <div className="mt-10 border-t border-slate-100 pt-8">
+            <NewAnalyticsSection data={data?.intelligence} />
           </div>
         </>
       )}

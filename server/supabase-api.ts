@@ -1,4 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
+import {
+  EMPTY_DOMAIN_INTELLIGENCE,
+  getDomainIntelligenceData,
+  getTldDistribution,
+  getTopKeywords,
+  type AnalyticsStat,
+  type DomainIntelligenceData,
+} from "../lib/analytics";
 
 export type ApiResponse = {
   status: number;
@@ -10,20 +18,11 @@ type DomainTldRow = {
   tld: string | null;
 };
 
-type RpcStatRow = {
-  name: string | null;
-  value: number | string | null;
-};
-
-type AnalyticsStat = {
-  name: string;
-  value: number;
-};
-
 type AnalyticsResponseBody = {
   totalCount: number;
   tldStats: AnalyticsStat[];
   keywordStats: AnalyticsStat[];
+  intelligence: DomainIntelligenceData;
 };
 
 let supabaseClient: ReturnType<typeof createClient> | null = null;
@@ -33,6 +32,7 @@ const inFlightData = new Map<string, Promise<unknown>>();
 const TLD_CACHE_TTL_MS = 60 * 60 * 1000;
 const ANALYTICS_CACHE_TTL_MS = 5 * 60 * 1000;
 const API_BROWSER_CACHE_SECONDS = 60;
+const ANALYTICS_CACHE_VERSION = "v2";
 
 function sanitizeEnvValue(value?: string) {
   if (!value) return "";
@@ -229,21 +229,6 @@ function normalizeTldValue(value: string | null) {
   return normalizedValue;
 }
 
-function normalizeRpcStats(rows: RpcStatRow[] | null | undefined, fallbackName = "unknown") {
-  return (rows || [])
-    .map((row) => {
-      const normalizedName = row.name?.trim() || fallbackName;
-      const numericValue =
-        typeof row.value === "number" ? row.value : Number.parseInt(String(row.value ?? 0), 10);
-
-      return {
-        name: normalizedName,
-        value: Number.isFinite(numericValue) ? numericValue : 0,
-      };
-    })
-    .filter((row) => row.name && row.value > 0);
-}
-
 async function getGlobalAnalyticsCount(supabase: ReturnType<typeof createClient>, dateStr: string) {
   let query = supabase.from("domains").select("*", { count: "exact", head: true });
   query = query.gte("created_at", dateStr);
@@ -257,57 +242,30 @@ async function getGlobalAnalyticsCount(supabase: ReturnType<typeof createClient>
   return count || 0;
 }
 
-async function callAnalyticsRpc(
-  supabase: ReturnType<typeof createClient>,
-  functionName: "get_top_tlds" | "get_top_keywords",
-  args: {
-    date_threshold: string;
-    filter_tld: string | null;
-    max_rows: number;
-  },
-) {
-  const { data, error } = await (supabase as any).rpc(functionName, args);
-  return {
-    data: (data || []) as RpcStatRow[],
-    error,
-  };
-}
-
 async function computeGlobalAnalytics(
   supabase: ReturnType<typeof createClient>,
   period: string,
   dateStr: string,
 ) {
   return loadCachedData<AnalyticsResponseBody>(
-    `analytics:global:${period}`,
+    `analytics:global:${ANALYTICS_CACHE_VERSION}:${period}`,
     ANALYTICS_CACHE_TTL_MS,
     async () => {
-      const [totalCount, tldResult, keywordResult] = await Promise.all([
+      const [totalCount, tldStats, keywordStats, intelligence] = await Promise.all([
         getGlobalAnalyticsCount(supabase, dateStr),
-        callAnalyticsRpc(supabase, "get_top_tlds", {
-          date_threshold: dateStr,
-          filter_tld: null,
-          max_rows: 10,
-        }),
-        callAnalyticsRpc(supabase, "get_top_keywords", {
-          date_threshold: dateStr,
-          filter_tld: null,
-          max_rows: 20,
+        getTldDistribution(supabase, { dateThreshold: dateStr, maxRows: 10 }),
+        getTopKeywords(supabase, { dateThreshold: dateStr, maxRows: 20 }),
+        getDomainIntelligenceData(supabase, { dateThreshold: dateStr }).catch((error) => {
+          console.error("[Analytics] Optional intelligence queries failed:", error);
+          return EMPTY_DOMAIN_INTELLIGENCE;
         }),
       ]);
 
-      if (tldResult.error) {
-        throw tldResult.error;
-      }
-
-      if (keywordResult.error) {
-        throw keywordResult.error;
-      }
-
       return {
         totalCount,
-        tldStats: normalizeRpcStats(tldResult.data),
-        keywordStats: normalizeRpcStats(keywordResult.data),
+        tldStats,
+        keywordStats,
+        intelligence,
       };
     },
   );
@@ -320,21 +278,9 @@ async function computeFilteredKeywordStats(
   filterTld: string,
 ) {
   return loadCachedData<AnalyticsStat[]>(
-    `analytics:keywords:${period}:${filterTld}`,
+    `analytics:keywords:${ANALYTICS_CACHE_VERSION}:${period}:${filterTld}`,
     ANALYTICS_CACHE_TTL_MS,
-    async () => {
-      const { data, error } = await callAnalyticsRpc(supabase, "get_top_keywords", {
-        date_threshold: dateStr,
-        filter_tld: filterTld,
-        max_rows: 20,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      return normalizeRpcStats(data);
-    },
+    () => getTopKeywords(supabase, { dateThreshold: dateStr, filterTld, maxRows: 20 }),
   );
 }
 
@@ -469,6 +415,7 @@ export async function getAnalyticsResponse(params: URLSearchParams): Promise<Api
         totalCount: globalAnalytics.totalCount,
         tldStats: globalAnalytics.tldStats,
         keywordStats,
+        intelligence: globalAnalytics.intelligence,
       },
       Math.floor(ANALYTICS_CACHE_TTL_MS / 1000),
     );

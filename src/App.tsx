@@ -20,13 +20,47 @@ const INITIAL_FILTERS: FilterState = {
   sortOrder: 'desc',
 };
 
+function getInitialNavigationState() {
+  if (typeof window === 'undefined') {
+    return {
+      activeTab: 'explore' as const,
+      filters: INITIAL_FILTERS,
+    };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const requestedView = params.get('view');
+  const activeTab = requestedView === 'analytics' ? 'analytics' : 'explore';
+
+  const tlds = params
+    .get('tlds')
+    ?.split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  const keywords = params
+    .get('keywords')
+    ?.split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  return {
+    activeTab,
+    filters: {
+      ...INITIAL_FILTERS,
+      tlds: tlds && tlds.length > 0 ? tlds : INITIAL_FILTERS.tlds,
+      keywords: keywords && keywords.length > 0 ? keywords : INITIAL_FILTERS.keywords,
+    },
+  };
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'explore' | 'analytics'>('explore');
+  const initialNavigationState = getInitialNavigationState();
+  const [activeTab, setActiveTab] = useState<'explore' | 'analytics'>(initialNavigationState.activeTab);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [tlds, setTlds] = useState<string[]>(['ai', 'app', 'com', 'io', 'net', 'org', 'xyz']);
   const [loading, setLoading] = useState(true);
   const [domainsError, setDomainsError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
+  const [filters, setFilters] = useState<FilterState>(initialNavigationState.filters);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
