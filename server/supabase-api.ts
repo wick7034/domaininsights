@@ -3,18 +3,36 @@ import { createClient } from "@supabase/supabase-js";
 export type ApiResponse = {
   status: number;
   body: unknown;
+  headers?: Record<string, string>;
 };
 
 type DomainTldRow = {
   tld: string | null;
 };
 
-type AnalyticsRow = {
-  tld: string | null;
-  keywords: string[] | null;
+type RpcStatRow = {
+  name: string | null;
+  value: number | string | null;
+};
+
+type AnalyticsStat = {
+  name: string;
+  value: number;
+};
+
+type AnalyticsResponseBody = {
+  totalCount: number;
+  tldStats: AnalyticsStat[];
+  keywordStats: AnalyticsStat[];
 };
 
 let supabaseClient: ReturnType<typeof createClient> | null = null;
+const dataCache = new Map<string, { expiresAt: number; value: unknown }>();
+const inFlightData = new Map<string, Promise<unknown>>();
+
+const TLD_CACHE_TTL_MS = 60 * 60 * 1000;
+const ANALYTICS_CACHE_TTL_MS = 5 * 60 * 1000;
+const API_BROWSER_CACHE_SECONDS = 60;
 
 function sanitizeEnvValue(value?: string) {
   if (!value) return "";
@@ -122,6 +140,61 @@ function handleServerError(error: unknown): ApiResponse {
   };
 }
 
+function createSuccessResponse(body: unknown, sharedCacheSeconds?: number): ApiResponse {
+  return {
+    status: 200,
+    body,
+    headers:
+      sharedCacheSeconds && sharedCacheSeconds > 0
+        ? {
+            "Cache-Control": `public, max-age=${API_BROWSER_CACHE_SECONDS}, s-maxage=${sharedCacheSeconds}, stale-while-revalidate=${sharedCacheSeconds}`,
+          }
+        : undefined,
+  };
+}
+
+function getCachedData<T>(key: string) {
+  const cachedEntry = dataCache.get(key);
+
+  if (!cachedEntry) {
+    return undefined;
+  }
+
+  if (cachedEntry.expiresAt <= Date.now()) {
+    dataCache.delete(key);
+    return undefined;
+  }
+
+  return cachedEntry.value as T;
+}
+
+async function loadCachedData<T>(key: string, ttlMs: number, loader: () => Promise<T>) {
+  const cachedValue = getCachedData<T>(key);
+  if (cachedValue !== undefined) {
+    return cachedValue;
+  }
+
+  const inFlightValue = inFlightData.get(key);
+  if (inFlightValue) {
+    return (await inFlightValue) as T;
+  }
+
+  const promise = loader()
+    .then((value) => {
+      dataCache.set(key, {
+        value,
+        expiresAt: Date.now() + ttlMs,
+      });
+      return value;
+    })
+    .finally(() => {
+      inFlightData.delete(key);
+    });
+
+  inFlightData.set(key, promise as Promise<unknown>);
+  return promise;
+}
+
 function normalizeSortBy(sortBy?: string) {
   const allowedSortFields = new Set(["created_at", "domain", "length"]);
   return sortBy && allowedSortFields.has(sortBy) ? sortBy : "created_at";
@@ -137,6 +210,132 @@ function normalizePeriod(period?: string) {
   }
 
   return "7d";
+}
+
+function getPeriodDays(period: string) {
+  if (period === "1d") return 1;
+  if (period === "30d") return 30;
+  return 7;
+}
+
+function normalizeTldValue(value: string | null) {
+  if (!value) return "";
+
+  let normalizedValue = value.trim().toLowerCase();
+  if (normalizedValue.startsWith(".")) {
+    normalizedValue = normalizedValue.slice(1);
+  }
+
+  return normalizedValue;
+}
+
+function normalizeRpcStats(rows: RpcStatRow[] | null | undefined, fallbackName = "unknown") {
+  return (rows || [])
+    .map((row) => {
+      const normalizedName = row.name?.trim() || fallbackName;
+      const numericValue =
+        typeof row.value === "number" ? row.value : Number.parseInt(String(row.value ?? 0), 10);
+
+      return {
+        name: normalizedName,
+        value: Number.isFinite(numericValue) ? numericValue : 0,
+      };
+    })
+    .filter((row) => row.name && row.value > 0);
+}
+
+async function getGlobalAnalyticsCount(supabase: ReturnType<typeof createClient>, dateStr: string) {
+  let query = supabase.from("domains").select("*", { count: "exact", head: true });
+  query = query.gte("created_at", dateStr);
+
+  const { count, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return count || 0;
+}
+
+async function callAnalyticsRpc(
+  supabase: ReturnType<typeof createClient>,
+  functionName: "get_top_tlds" | "get_top_keywords",
+  args: {
+    date_threshold: string;
+    filter_tld: string | null;
+    max_rows: number;
+  },
+) {
+  const { data, error } = await (supabase as any).rpc(functionName, args);
+  return {
+    data: (data || []) as RpcStatRow[],
+    error,
+  };
+}
+
+async function computeGlobalAnalytics(
+  supabase: ReturnType<typeof createClient>,
+  period: string,
+  dateStr: string,
+) {
+  return loadCachedData<AnalyticsResponseBody>(
+    `analytics:global:${period}`,
+    ANALYTICS_CACHE_TTL_MS,
+    async () => {
+      const [totalCount, tldResult, keywordResult] = await Promise.all([
+        getGlobalAnalyticsCount(supabase, dateStr),
+        callAnalyticsRpc(supabase, "get_top_tlds", {
+          date_threshold: dateStr,
+          filter_tld: null,
+          max_rows: 10,
+        }),
+        callAnalyticsRpc(supabase, "get_top_keywords", {
+          date_threshold: dateStr,
+          filter_tld: null,
+          max_rows: 20,
+        }),
+      ]);
+
+      if (tldResult.error) {
+        throw tldResult.error;
+      }
+
+      if (keywordResult.error) {
+        throw keywordResult.error;
+      }
+
+      return {
+        totalCount,
+        tldStats: normalizeRpcStats(tldResult.data),
+        keywordStats: normalizeRpcStats(keywordResult.data),
+      };
+    },
+  );
+}
+
+async function computeFilteredKeywordStats(
+  supabase: ReturnType<typeof createClient>,
+  period: string,
+  dateStr: string,
+  filterTld: string,
+) {
+  return loadCachedData<AnalyticsStat[]>(
+    `analytics:keywords:${period}:${filterTld}`,
+    ANALYTICS_CACHE_TTL_MS,
+    async () => {
+      const { data, error } = await callAnalyticsRpc(supabase, "get_top_keywords", {
+        date_threshold: dateStr,
+        filter_tld: filterTld,
+        max_rows: 20,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return normalizeRpcStats(data);
+    },
+  );
 }
 
 export async function getDomainsResponse(params: URLSearchParams): Promise<ApiResponse> {
@@ -215,10 +414,7 @@ export async function getDomainsResponse(params: URLSearchParams): Promise<ApiRe
       throw error;
     }
 
-    return {
-      status: 200,
-      body: { data, count },
-    };
+    return createSuccessResponse({ data, count });
   } catch (error) {
     return handleServerError(error);
   }
@@ -227,32 +423,27 @@ export async function getDomainsResponse(params: URLSearchParams): Promise<ApiRe
 export async function getTldsResponse(): Promise<ApiResponse> {
   try {
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase.from("domains").select("tld").limit(1000000);
+    const tlds = await loadCachedData<string[]>("tlds:list", TLD_CACHE_TTL_MS, async () => {
+      const { data, error } = await supabase.from("domains").select("tld").limit(1000000);
 
-    if (error) {
-      throw error;
-    }
-
-    const rows = (data || []) as DomainTldRow[];
-    const tldSet = new Set<string>();
-
-    for (const item of rows) {
-      if (!item.tld) continue;
-
-      let tld = item.tld.trim().toLowerCase();
-      if (tld.startsWith(".")) {
-        tld = tld.slice(1);
+      if (error) {
+        throw error;
       }
 
-      if (tld) {
-        tldSet.add(tld);
-      }
-    }
+      const rows = (data || []) as DomainTldRow[];
+      const tldSet = new Set<string>();
 
-    return {
-      status: 200,
-      body: Array.from(tldSet).sort(),
-    };
+      for (const item of rows) {
+        const normalizedTld = normalizeTldValue(item.tld);
+        if (normalizedTld) {
+          tldSet.add(normalizedTld);
+        }
+      }
+
+      return Array.from(tldSet).sort();
+    });
+
+    return createSuccessResponse(tlds, Math.floor(TLD_CACHE_TTL_MS / 1000));
   } catch (error) {
     return handleServerError(error);
   }
@@ -262,150 +453,25 @@ export async function getAnalyticsResponse(params: URLSearchParams): Promise<Api
   try {
     const supabase = getSupabaseClient();
     const period = normalizePeriod(getStringParam(params, "period"));
-    let tld = getStringParam(params, "tld");
-
-    if (tld) {
-      tld = tld.toLowerCase();
-      if (tld.startsWith(".")) {
-        tld = tld.slice(1);
-      }
-    }
-
-    let days = 7;
-    if (period === "1d") days = 1;
-    if (period === "30d") days = 30;
+    const normalizedTld = normalizeTldValue(getStringParam(params, "tld") || null);
+    const days = getPeriodDays(period);
 
     const dateThreshold = new Date();
     dateThreshold.setDate(dateThreshold.getDate() - days);
     const dateStr = dateThreshold.toISOString().split("T")[0];
+    const globalAnalytics = await computeGlobalAnalytics(supabase, period, dateStr);
+    const keywordStats = normalizedTld
+      ? await computeFilteredKeywordStats(supabase, period, dateStr, normalizedTld)
+      : globalAnalytics.keywordStats;
 
-    const getAggregatedStats = async (filterTld?: string) => {
-      const tldCounts: Record<string, number> = {};
-      const keywordCounts: Record<string, number> = {};
-      const stopWords = new Set([
-        "the",
-        "in",
-        "is",
-        "co",
-        "as",
-        "to",
-        "and",
-        "get",
-        "at",
-        "an",
-        "de",
-        "my",
-        "on",
-        "of",
-        "a",
-        "for",
-        "with",
-        "by",
-        "it",
-        "or",
-        "me",
-        "do",
-        "be",
-        "la",
-        "no",
-        "re",
-        "xn",
-        "us",
-        "so",
-        "en",
-      ]);
-
-      let from = 0;
-      let to = 999;
-      let finished = false;
-      let totalProcessed = 0;
-
-      while (!finished) {
-        let query = supabase.from("domains").select("tld,keywords").gte("created_at", dateStr);
-
-        if (filterTld) {
-          const normalizedTld = filterTld.trim().toLowerCase();
-          const tldWithDot = normalizedTld.startsWith(".") ? normalizedTld : `.${normalizedTld}`;
-          const tldWithoutDot = normalizedTld.startsWith(".")
-            ? normalizedTld.slice(1)
-            : normalizedTld;
-          query = query.or(`tld.ilike.${tldWithoutDot},tld.ilike.${tldWithDot}`);
-        }
-
-        const { data, error } = await query.range(from, to);
-
-        if (error) {
-          throw error;
-        }
-
-        const rows = (data || []) as AnalyticsRow[];
-
-        if (rows.length === 0) {
-          finished = true;
-          continue;
-        }
-
-        for (const item of rows) {
-          if (item.tld) {
-            let domainTld = item.tld.toLowerCase();
-            if (domainTld.startsWith(".")) {
-              domainTld = domainTld.slice(1);
-            }
-            tldCounts[domainTld] = (tldCounts[domainTld] || 0) + 1;
-          }
-
-          if (item.keywords && Array.isArray(item.keywords)) {
-            for (const keyword of item.keywords) {
-              const normalizedKeyword = String(keyword).toLowerCase();
-              if (!stopWords.has(normalizedKeyword) && normalizedKeyword.length > 1) {
-                keywordCounts[normalizedKeyword] = (keywordCounts[normalizedKeyword] || 0) + 1;
-              }
-            }
-          }
-        }
-
-        totalProcessed += rows.length;
-
-        if (rows.length < 1000 || totalProcessed > 5000000) {
-          finished = true;
-        } else {
-          from += 1000;
-          to += 1000;
-        }
-      }
-
-      return { tldCounts, keywordCounts };
-    };
-
-    let countQuery = supabase.from("domains").select("*", { count: "exact", head: true });
-    countQuery = countQuery.gte("created_at", dateStr);
-
-    const { count: totalCount, error: countError } = await countQuery;
-
-    if (countError) {
-      throw countError;
-    }
-
-    const { tldCounts, keywordCounts } = await getAggregatedStats(tld);
-
-    const tldStats = Object.entries(tldCounts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-
-    const keywordStats = Object.entries(keywordCounts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 20);
-
-    return {
-      status: 200,
-      body: {
-        totalCount,
-        tldStats,
+    return createSuccessResponse(
+      {
+        totalCount: globalAnalytics.totalCount,
+        tldStats: globalAnalytics.tldStats,
         keywordStats,
       },
-    };
+      Math.floor(ANALYTICS_CACHE_TTL_MS / 1000),
+    );
   } catch (error) {
     return handleServerError(error);
   }

@@ -7,6 +7,7 @@ export const handler = async (event: any) => {
     statusCode: response.status,
     headers: {
       "Content-Type": "application/json",
+      ...(response.headers || {}),
     },
     body: JSON.stringify(response.body),
   };

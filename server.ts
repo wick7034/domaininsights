@@ -11,6 +11,16 @@ import {
 
 dotenv.config();
 
+function sendApiResponse(res: express.Response, response: Awaited<ReturnType<typeof getDomainsResponse>>) {
+  if (response.headers) {
+    for (const [headerName, headerValue] of Object.entries(response.headers)) {
+      res.setHeader(headerName, headerValue);
+    }
+  }
+
+  res.status(response.status).json(response.body);
+}
+
 export async function createApp() {
   const app = express();
   app.use(express.json());
@@ -18,17 +28,17 @@ export async function createApp() {
   // API Routes
   app.get("/api/domains", async (req, res) => {
     const response = await getDomainsResponse(toSearchParams(req.query as Record<string, unknown>));
-    res.status(response.status).json(response.body);
+    sendApiResponse(res, response);
   });
 
   app.get("/api/tlds", async (req, res) => {
     const response = await getTldsResponse();
-    res.status(response.status).json(response.body);
+    sendApiResponse(res, response);
   });
 
   app.get("/api/analytics", async (req, res) => {
     const response = await getAnalyticsResponse(toSearchParams(req.query as Record<string, unknown>));
-    res.status(response.status).json(response.body);
+    sendApiResponse(res, response);
   });
 
   // Vite middleware for development
