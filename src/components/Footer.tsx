@@ -13,7 +13,7 @@ export const Footer: React.FC = () => {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white">
                 <Globe size={18} />
               </div>
-              <span className="text-xl font-bold tracking-tight text-slate-900">DomainInsights</span>
+              <span className="text-xl font-bold tracking-tight text-slate-900">c</span>
             </div>
             <p className="mt-4 max-w-xs text-sm text-slate-500">
               Real-time domain registration analytics and registry insights. Track trends, discover keywords, and explore the global domain landscape.

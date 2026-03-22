@@ -10,14 +10,13 @@ const supabaseUrl = process.env.SUPABASE_URL || "";
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-async function startServer() {
+export async function createApp() {
   const app = express();
-  const PORT = 3000;
-
   app.use(express.json());
 
   // API Routes
   app.get("/api/domains", async (req, res) => {
+    // ... existing logic ...
     try {
       const { 
         page = 0, 
@@ -276,6 +275,12 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+}
+
+const PORT = process.env.PORT || 3000;
+
+async function startServer() {
+  await createApp();
 }
 
 startServer();
