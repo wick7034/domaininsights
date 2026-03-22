@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, Legend 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
 import { Calendar, TrendingUp, Globe, Hash } from 'lucide-react';
 import { NewAnalyticsSection } from './analytics/NewAnalyticsSection';
@@ -154,41 +153,6 @@ export const Analytics: React.FC = () => {
           </div>
 
           <div className="space-y-8">
-            {/* TLD Distribution */}
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-              <h3 className="mb-6 text-sm font-bold uppercase tracking-wider text-slate-400">Domains per TLD</h3>
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={data?.tldStats?.slice(0, 10)}
-                      cx="40%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {data?.tldStats?.map((entry: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend 
-                      layout="vertical" 
-                      verticalAlign="middle" 
-                      align="right"
-                      formatter={(value, entry: any) => (
-                        <span className="text-xs font-medium text-slate-600">
-                          {value}: <span className="font-bold text-slate-900">{entry.payload.value}</span>
-                        </span>
-                      )}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
             {/* Keyword Trends */}
             <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
               <div className="mb-6 flex items-center justify-between">
