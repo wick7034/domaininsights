@@ -347,8 +347,8 @@ export async function getDomainsResponse(params: URLSearchParams): Promise<ApiRe
       }
     }
 
-    if (startsWith) query = query.ilike("domain", `${startsWith}%`);
-    if (endsWith) query = query.ilike("domain", `%${endsWith}`);
+    if (startsWith) query = query.ilike("name", `${startsWith}%`);
+    if (endsWith) query = query.ilike("name", `%${endsWith}`);
 
     query = query
       .order(sortBy, { ascending: sortOrder === "asc" })
