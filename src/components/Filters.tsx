@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Filter, X, ChevronDown, ChevronUp, Search } from 'lucide-react';
+import React, { useState } from 'react';
+import { Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import { FilterState } from '../types/domain';
 
 interface FiltersProps {
@@ -10,9 +10,6 @@ interface FiltersProps {
 
 export const Filters: React.FC<FiltersProps> = ({ filters, onFilterChange, tlds }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [tldSearch, setTldSearch] = useState('');
-
-  const filteredTlds = tlds.filter(tld => tld.toLowerCase().includes(tldSearch.toLowerCase()));
 
   return (
     <div className="border-b border-slate-100 bg-slate-50/50">
@@ -58,33 +55,34 @@ export const Filters: React.FC<FiltersProps> = ({ filters, onFilterChange, tlds 
             {/* TLDs */}
             <div className="space-y-3">
               <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">TLDs</label>
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 text-slate-400" size={14} />
-                <input 
-                  type="text" 
-                  placeholder="Search TLDs..." 
-                  value={tldSearch}
-                  onChange={(e) => setTldSearch(e.target.value)}
-                  className="w-full rounded-md border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="max-h-40 overflow-y-auto space-y-1 pr-2 scrollbar-hide">
-                {filteredTlds.map(tld => (
-                  <label key={tld} className="flex items-center gap-2 cursor-pointer group">
-                    <input 
-                      type="checkbox" 
-                      checked={filters.tlds.includes(tld)}
-                      onChange={(e) => {
-                        const newTlds = e.target.checked 
-                          ? [...filters.tlds, tld]
-                          : filters.tlds.filter(t => t !== tld);
+              <div className="flex flex-wrap gap-2">
+                {tlds.map((tld) => {
+                  const isSelected = filters.tlds.includes(tld);
+
+                  return (
+                    <button
+                      key={tld}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => {
+                        const newTlds = isSelected
+                          ? filters.tlds.filter((value) => value !== tld)
+                          : [...filters.tlds, tld];
                         onFilterChange({ tlds: newTlds });
                       }}
-                      className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                    />
-                    <span className="text-xs text-slate-600 group-hover:text-slate-900">.{tld}</span>
-                  </label>
-                ))}
+                      className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition-all ${
+                        isSelected
+                          ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      .{tld}
+                    </button>
+                  );
+                })}
+                {tlds.length === 0 && (
+                  <span className="text-xs text-slate-400">No TLDs available</span>
+                )}
               </div>
             </div>
 
