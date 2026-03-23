@@ -73,7 +73,7 @@ export const DomainList: React.FC<DomainListProps> = ({ domains, loading }) => {
                   )}
                 </div>
                 <a 
-                  href={`https://www.namecheap.com/domains/registration/results/?domain=${domain.domain}`}
+                  href={`https://www.whois.com/whois/${domain.domain}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="rounded-full p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-900 md:hidden"
@@ -85,7 +85,7 @@ export const DomainList: React.FC<DomainListProps> = ({ domains, loading }) => {
               {/* Metadata - Mobile Inline / Desktop Columns */}
               <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500 md:mt-0 md:contents md:text-[12px]">
                 <div className="md:col-span-1">
-                  <span className="md:hidden">.</span>
+                  <span className="md:hidden"></span>
                   {domain.tld}
                 </div>
                 <div className="md:col-span-1">
@@ -100,7 +100,7 @@ export const DomainList: React.FC<DomainListProps> = ({ domains, loading }) => {
               {/* Desktop Action */}
               <div className="absolute right-4 hidden items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 md:flex">
                 <a 
-                  href={`https://www.namecheap.com/domains/registration/results/?domain=${domain.domain}`}
+                  href={`https://www.whois.com/whois/${domain.domain}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[10px] font-bold text-slate-600 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50"
