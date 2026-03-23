@@ -5,7 +5,13 @@ import { DomainList } from './components/DomainList';
 import { Analytics } from './components/Analytics';
 import { Footer } from './components/Footer';
 import { Domain, FilterState } from './types/domain';
-import { Search, RotateCcw } from 'lucide-react';
+import { ArrowUpRight, Calendar, Globe, Hash, RotateCcw, TrendingUp } from 'lucide-react';
+
+type ExploreAnalyticsPreview = {
+  totalCount: number;
+  topTld: string;
+  hotKeyword: string;
+};
 
 const INITIAL_FILTERS: FilterState = {
   tlds: [],
@@ -63,6 +69,8 @@ export default function App() {
   const [filters, setFilters] = useState<FilterState>(initialNavigationState.filters);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [analyticsPreview, setAnalyticsPreview] = useState<ExploreAnalyticsPreview | null>(null);
+  const [analyticsPreviewLoading, setAnalyticsPreviewLoading] = useState(true);
 
   const fetchTlds = async () => {
     try {
@@ -128,6 +136,47 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const fetchAnalyticsPreview = async () => {
+      setAnalyticsPreviewLoading(true);
+
+      try {
+        const res = await fetch('/api/analytics?period=1d');
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ error: `Server error: ${res.status}` }));
+          throw new Error(errorData.error || `Server error: ${res.status}`);
+        }
+
+        const result = await res.json();
+        if (!isMounted) return;
+
+        setAnalyticsPreview({
+          totalCount: result?.totalCount || 0,
+          topTld: result?.tldStats?.[0]?.name || 'N/A',
+          hotKeyword: result?.keywordStats?.[0]?.name || 'N/A',
+        });
+      } catch (err) {
+        console.error('Failed to fetch analytics preview:', err);
+
+        if (isMounted) {
+          setAnalyticsPreview(null);
+        }
+      } finally {
+        if (isMounted) {
+          setAnalyticsPreviewLoading(false);
+        }
+      }
+    };
+
+    fetchAnalyticsPreview();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     fetchTlds();
   }, []);
 
@@ -146,6 +195,14 @@ export default function App() {
     fetchDomains(filters, nextPage);
   };
 
+  const openAnalytics = () => {
+    setActiveTab('analytics');
+
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <Header activeTab={activeTab} onTabChange={setActiveTab} />
@@ -153,9 +210,75 @@ export default function App() {
       <main className="mx-auto max-w-7xl px-4 pb-20 sm:px-6">
         {activeTab === 'explore' ? (
           <>
-            <div className="flex flex-col gap-1 py-8">
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Registry</h1>
-              <p className="text-sm text-slate-500">Real-time database of newly registered domains</p>
+            <div className="flex flex-col gap-4 py-8 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex flex-col gap-1">
+                <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Registry</h1>
+                <p className="text-sm text-slate-500">Real-time database of newly registered domains</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={openAnalytics}
+                className="w-full rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100/80 p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md lg:max-w-2xl"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                  <div className="flex items-center justify-between gap-3 lg:min-w-[12rem] lg:max-w-[12rem]">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Yesterday Snapshot</div>
+                      <p className="mt-0.5 text-[11px] text-slate-500">Open analytics</p>
+                    </div>
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600">
+                      <ArrowUpRight size={14} />
+                    </span>
+                  </div>
+
+                  <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div className="rounded-xl border border-slate-200/70 bg-white/90 px-3 py-2.5">
+                      <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                        <Calendar size={12} />
+                        <span>Total Registered</span>
+                      </div>
+                      <div className="mt-1.5 text-base font-bold text-slate-900">
+                        {analyticsPreviewLoading
+                          ? '...'
+                          : analyticsPreview
+                            ? analyticsPreview.totalCount.toLocaleString()
+                            : 'N/A'}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200/70 bg-white/90 px-3 py-2.5">
+                      <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                        <Globe size={12} />
+                        <span>Top TLD</span>
+                      </div>
+                      <div className="mt-1.5 text-base font-bold text-slate-900">
+                        {analyticsPreviewLoading
+                          ? '...'
+                          : analyticsPreview
+                            ? analyticsPreview.topTld === 'N/A'
+                              ? 'N/A'
+                              : `.${analyticsPreview.topTld}`
+                            : 'N/A'}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200/70 bg-white/90 px-3 py-2.5">
+                      <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                        <TrendingUp size={12} />
+                        <span>Hot Keyword</span>
+                      </div>
+                      <div className="mt-1.5 truncate text-base font-bold text-slate-900">
+                        {analyticsPreviewLoading
+                          ? '...'
+                          : analyticsPreview
+                            ? analyticsPreview.hotKeyword
+                            : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </button>
             </div>
 
             <div className="sticky top-14 z-40 -mx-4 bg-white sm:-mx-6">
