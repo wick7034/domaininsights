@@ -190,9 +190,7 @@ export const NewAnalyticsSection: React.FC<NewAnalyticsSectionProps> = ({ data }
     <div className="space-y-6">
       <div className="space-y-1">
         <h3 className="text-lg font-bold text-slate-900">Domain Intelligence</h3>
-        <p className="text-xs text-slate-500">
-          Additional registry signals layered below the existing analytics.
-        </p>
+        
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

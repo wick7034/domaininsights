@@ -155,7 +155,7 @@ export default function App() {
           <>
             <div className="flex flex-col gap-1 py-8">
               <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Registry</h1>
-              <p className="text-sm text-slate-500">Real-time insights into newly registered domains</p>
+              <p className="text-sm text-slate-500">Real-time database of newly registered domains</p>
             </div>
 
             <div className="sticky top-14 z-40 -mx-4 bg-white sm:-mx-6">
