@@ -1,4 +1,4 @@
-export const ANALYTICS_SHARE_URL = "https://domaininsights.netlify.app/";
+export const ANALYTICS_SHARE_URL = "https://domaininsights.xyz/";
 
 const SHARE_CARD_WIDTH = 1200;
 const SHARE_CARD_HEIGHT = 675;
