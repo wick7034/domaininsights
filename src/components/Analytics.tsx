@@ -2,8 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
-import { Calendar, TrendingUp, Globe, Hash } from 'lucide-react';
+import { Calendar, TrendingUp, Globe, Hash, Share2 } from 'lucide-react';
 import { NewAnalyticsSection } from './analytics/NewAnalyticsSection';
+import {
+  buildAnalyticsShareTweet,
+  buildAnalyticsShareSnapshot,
+  copyAnalyticsShareCardToClipboard,
+  createAnalyticsShareCardBlob,
+  createAnalyticsShareCardFile,
+  downloadAnalyticsShareCard,
+  getAnalyticsTweetIntentUrl,
+  type AnalyticsShareSnapshot,
+} from './analytics/shareCard';
 
 const COLORS = ['#f43f5e', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#14b8a6', '#f97316', '#84cc16'];
 
@@ -13,8 +23,26 @@ export const Analytics: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [shareSnapshot, setShareSnapshot] = useState<AnalyticsShareSnapshot | null>(null);
+  const [shareLoading, setShareLoading] = useState(true);
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   const [availableTlds, setAvailableTlds] = useState<string[]>(['ai', 'app', 'com', 'io', 'net', 'org', 'xyz']);
+
+  useEffect(() => {
+    if (!shareStatus) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShareStatus(null);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [shareStatus]);
 
   useEffect(() => {
     const fetchTlds = async () => {
@@ -32,6 +60,43 @@ export const Analytics: React.FC = () => {
       }
     };
     fetchTlds();
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchShareSnapshot = async () => {
+      setShareLoading(true);
+      try {
+        const res = await fetch('/api/analytics?period=1d&shareCardVersion=1');
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ error: 'Unknown server error' }));
+          throw new Error(errorData.error || `Server error: ${res.status}`);
+        }
+
+        const result = await res.json();
+        if (!isMounted) {
+          return;
+        }
+
+        setShareSnapshot(buildAnalyticsShareSnapshot(result));
+      } catch (err) {
+        console.error('Failed to fetch analytics share snapshot:', err);
+        if (isMounted) {
+          setShareSnapshot(null);
+        }
+      } finally {
+        if (isMounted) {
+          setShareLoading(false);
+        }
+      }
+    };
+
+    fetchShareSnapshot();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -60,6 +125,64 @@ export const Analytics: React.FC = () => {
     };
     fetchAnalytics();
   }, [period, selectedTld]);
+
+  const tweetIntentUrl = shareSnapshot ? getAnalyticsTweetIntentUrl(shareSnapshot) : '#';
+
+  const handleShareToX = async (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!shareSnapshot) {
+      event.preventDefault();
+      return;
+    }
+
+    setShareStatus(null);
+
+    const canUseNativeShare =
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function' &&
+      typeof navigator.canShare === 'function';
+
+    if (canUseNativeShare) {
+      event.preventDefault();
+      setSharing(true);
+
+      try {
+        const shareFile = await createAnalyticsShareCardFile(shareSnapshot);
+
+        if (navigator.canShare({ files: [shareFile] })) {
+          await navigator.share({
+            files: [shareFile],
+            text: buildAnalyticsShareTweet(shareSnapshot),
+            title: 'Domain Market Update (Yesterday)',
+          });
+          setShareStatus('Share sheet opened. Choose X to post the card.');
+          return;
+        }
+      } catch (err) {
+        console.error('Native share failed, falling back to X intent:', err);
+      } finally {
+        setSharing(false);
+      }
+    }
+
+    setSharing(true);
+
+    try {
+      const shareBlob = await createAnalyticsShareCardBlob(shareSnapshot);
+      const copied = await copyAnalyticsShareCardToClipboard(shareBlob);
+
+      if (copied) {
+        setShareStatus('Tweet opened. Share card copied for manual attach.');
+      } else {
+        downloadAnalyticsShareCard(shareBlob);
+        setShareStatus('Tweet opened. Share card downloaded for manual attach.');
+      }
+    } catch (err) {
+      console.error('Failed to prepare analytics share card:', err);
+      setShareStatus('Tweet opened. The share card could not be prepared automatically.');
+    } finally {
+      setSharing(false);
+    }
+  };
 
   if (loading && !data) {
     return (
@@ -91,20 +214,42 @@ export const Analytics: React.FC = () => {
           <p className="text-sm text-slate-500">Insights into registration trends and keyword popularity.</p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
-            {(['1d', '7d', '30d'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                  period === p ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                {p === '1d' ? 'Yesterday' : p === '7d' ? 'Last 7 Days' : '30 Days'}
-              </button>
-            ))}
+        <div className="flex flex-col gap-2 sm:items-end">
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={tweetIntentUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={handleShareToX}
+              aria-disabled={shareLoading || !shareSnapshot || sharing}
+              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold uppercase tracking-wide transition-all ${
+                shareLoading || !shareSnapshot || sharing
+                  ? 'pointer-events-none border-slate-200 bg-slate-100 text-slate-400'
+                  : 'border-slate-900 bg-slate-900 text-white hover:bg-slate-800'
+              }`}
+            >
+              <Share2 size={14} />
+              {sharing ? 'Preparing...' : 'Share to X'}
+            </a>
+
+            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+              {(['1d', '7d', '30d'] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+                    period === p ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  {p === '1d' ? 'Yesterday' : p === '7d' ? 'Last 7 Days' : '30 Days'}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {shareStatus && (
+            <p className="text-xs text-slate-500">{shareStatus}</p>
+          )}
         </div>
       </div>
 
