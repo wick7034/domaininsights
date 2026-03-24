@@ -42,7 +42,7 @@ function truncateValue(value: string, maxLength: number) {
     return value;
   }
 
-  return `${value.slice(0, maxLength - 1)}…`;
+  return `${value.slice(0, maxLength - 3)}...`;
 }
 
 function normalizeCount(value: number | null | undefined) {
@@ -91,16 +91,16 @@ export function buildAnalyticsShareSnapshot(
 
 export function buildAnalyticsShareTweet(snapshot: AnalyticsShareSnapshot) {
   return [
-    "Explore trends , 🚨 Domain Market Update (Yesterday)",
+    "Explore trends , \uD83D\uDEA8 Domain Market Update (Yesterday)",
     "",
-    `📊 ${countFormatter.format(snapshot.totalDomains)} domains registered`,
+    `\uD83D\uDCCA ${countFormatter.format(snapshot.totalDomains)} domains registered`,
     "",
-    `🔥 Top TLD: ${snapshot.topTld}`,
-    `🔥 Hot Keyword: ${snapshot.hotKeyword}`,
+    `\uD83D\uDD25 Top TLD: ${snapshot.topTld}`,
+    `\uD83D\uDD25 Hot Keyword: ${snapshot.hotKeyword}`,
     "",
-    `📈 Rising: ${snapshot.risingKeyword} saw (${formatGrowth(snapshot.growthPercent)}%)`,
+    `\uD83D\uDCC8 Rising Keyword: ${snapshot.risingKeyword} (${formatGrowth(snapshot.growthPercent)}% over previous day)`,
     "",
-    "Explore trends , see what people are registering👇",
+    "Explore trends , see what people are registering\uD83D\uDC47",
     snapshot.siteUrl,
   ].join("\n");
 }
@@ -142,8 +142,8 @@ function buildAnalyticsShareCardSvg(snapshot: AnalyticsShareSnapshot) {
     <rect x="88" y="108" width="1024" height="460" rx="32" fill="white"/>
   </g>
 
-  <rect x="126" y="146" width="180" height="38" rx="19" fill="url(#chip)"/>
-  <text x="156" y="170" fill="white" font-size="16" font-weight="700" font-family="'Segoe UI', Arial, sans-serif" letter-spacing="1.2">DOMAININSIGHTS</text>
+  <rect x="126" y="146" width="238" height="38" rx="19" fill="url(#chip)"/>
+  <text x="156" y="170" fill="white" font-size="16" font-weight="700" font-family="'Segoe UI', Arial, sans-serif" letter-spacing="1.2">DomainInsights</text>
 
   <text x="126" y="246" fill="#0f172a" font-size="52" font-weight="800" font-family="'Segoe UI', Arial, sans-serif">Domain Market Update</text>
   <text x="126" y="286" fill="#64748b" font-size="24" font-weight="600" font-family="'Segoe UI', Arial, sans-serif">Yesterday Snapshot</text>
@@ -164,7 +164,7 @@ function buildAnalyticsShareCardSvg(snapshot: AnalyticsShareSnapshot) {
   <text x="748" y="448" fill="#64748b" font-size="18" font-weight="600" font-family="'Segoe UI', Arial, sans-serif">most active keyword</text>
 
   <rect x="126" y="482" width="948" height="54" rx="27" fill="url(#accent)"/>
-  <text x="156" y="516" fill="white" font-size="22" font-weight="800" font-family="'Segoe UI', Arial, sans-serif">Rising: ${escapeXml(risingKeyword)} saw (${escapeXml(growthPercent)})</text>
+  <text x="156" y="516" fill="white" font-size="22" font-weight="800" font-family="'Segoe UI', Arial, sans-serif">Rising Keyword: ${escapeXml(risingKeyword)}(${escapeXml(growthPercent)})</text>
 
   <text x="126" y="608" fill="#64748b" font-size="20" font-weight="600" font-family="'Segoe UI', Arial, sans-serif">Explore trends and see what people are registering</text>
   <text x="126" y="636" fill="#0f172a" font-size="22" font-weight="800" font-family="'Segoe UI', Arial, sans-serif">${escapeXml(snapshot.siteUrl)}</text>
@@ -209,50 +209,6 @@ export async function createAnalyticsShareCardBlob(snapshot: AnalyticsShareSnaps
   });
 }
 
-export async function createAnalyticsShareCardFile(snapshot: AnalyticsShareSnapshot) {
-  const blob = await createAnalyticsShareCardBlob(snapshot);
-
-  return new File([blob], "domain-market-update-yesterday.png", {
-    type: "image/png",
-  });
-}
-
-export async function copyAnalyticsShareCardToClipboard(blob: Blob) {
-  if (
-    typeof navigator === "undefined" ||
-    !navigator.clipboard ||
-    typeof ClipboardItem === "undefined"
-  ) {
-    return false;
-  }
-
-  try {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        [blob.type]: blob,
-      }),
-    ]);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function downloadAnalyticsShareCard(blob: Blob) {
-  const blobUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-
-  anchor.href = blobUrl;
-  anchor.download = "domain-market-update-yesterday.png";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-
-  window.setTimeout(() => {
-    URL.revokeObjectURL(blobUrl);
-  }, 0);
-}
-
 export function getAnalyticsTweetIntentUrl(snapshot: AnalyticsShareSnapshot) {
-  return `https://twitter.com/intent/tweet?text=${encodeURIComponent(buildAnalyticsShareTweet(snapshot))}`;
+  return `https://x.com/intent/tweet?text=${encodeURIComponent(buildAnalyticsShareTweet(snapshot))}`;
 }

@@ -2,15 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
-import { Calendar, TrendingUp, Globe, Hash, Share2 } from 'lucide-react';
+import { Calendar, TrendingUp, Globe, Hash, Share2, X } from 'lucide-react';
 import { NewAnalyticsSection } from './analytics/NewAnalyticsSection';
 import {
   buildAnalyticsShareTweet,
   buildAnalyticsShareSnapshot,
-  copyAnalyticsShareCardToClipboard,
   createAnalyticsShareCardBlob,
-  createAnalyticsShareCardFile,
-  downloadAnalyticsShareCard,
   getAnalyticsTweetIntentUrl,
   type AnalyticsShareSnapshot,
 } from './analytics/shareCard';
@@ -25,24 +22,12 @@ export const Analytics: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [shareSnapshot, setShareSnapshot] = useState<AnalyticsShareSnapshot | null>(null);
   const [shareLoading, setShareLoading] = useState(true);
-  const [shareStatus, setShareStatus] = useState<string | null>(null);
-  const [sharing, setSharing] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareCardPreviewUrl, setShareCardPreviewUrl] = useState<string | null>(null);
+  const [shareCardLoading, setShareCardLoading] = useState(false);
+  const [shareCardError, setShareCardError] = useState<string | null>(null);
 
   const [availableTlds, setAvailableTlds] = useState<string[]>(['ai', 'app', 'com', 'io', 'net', 'org', 'xyz']);
-
-  useEffect(() => {
-    if (!shareStatus) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setShareStatus(null);
-    }, 5000);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [shareStatus]);
 
   useEffect(() => {
     const fetchTlds = async () => {
@@ -100,6 +85,14 @@ export const Analytics: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (shareCardPreviewUrl) {
+        URL.revokeObjectURL(shareCardPreviewUrl);
+      }
+    };
+  }, [shareCardPreviewUrl]);
+
+  useEffect(() => {
     const fetchAnalytics = async () => {
       setLoading(true);
       setError(null);
@@ -127,62 +120,83 @@ export const Analytics: React.FC = () => {
   }, [period, selectedTld]);
 
   const tweetIntentUrl = shareSnapshot ? getAnalyticsTweetIntentUrl(shareSnapshot) : '#';
+  const tweetText = shareSnapshot ? buildAnalyticsShareTweet(shareSnapshot) : '';
 
-  const handleShareToX = async (event: React.MouseEvent<HTMLAnchorElement>) => {
+  const openShareModal = async () => {
     if (!shareSnapshot) {
-      event.preventDefault();
       return;
     }
 
-    setShareStatus(null);
+    setShareModalOpen(true);
+    setShareCardError(null);
 
-    const canUseNativeShare =
-      typeof navigator !== 'undefined' &&
-      typeof navigator.share === 'function' &&
-      typeof navigator.canShare === 'function';
-
-    if (canUseNativeShare) {
-      event.preventDefault();
-      setSharing(true);
-
-      try {
-        const shareFile = await createAnalyticsShareCardFile(shareSnapshot);
-
-        if (navigator.canShare({ files: [shareFile] })) {
-          await navigator.share({
-            files: [shareFile],
-            text: buildAnalyticsShareTweet(shareSnapshot),
-            title: 'Domain Market Update (Yesterday)',
-          });
-          setShareStatus('Share sheet opened. Choose X to post the card.');
-          return;
-        }
-      } catch (err) {
-        console.error('Native share failed, falling back to X intent:', err);
-      } finally {
-        setSharing(false);
-      }
+    if (shareCardPreviewUrl || shareCardLoading) {
+      return;
     }
 
-    setSharing(true);
+    setShareCardLoading(true);
 
     try {
       const shareBlob = await createAnalyticsShareCardBlob(shareSnapshot);
-      const copied = await copyAnalyticsShareCardToClipboard(shareBlob);
+      const nextPreviewUrl = URL.createObjectURL(shareBlob);
 
-      if (copied) {
-        setShareStatus('Tweet opened. Share card copied for manual attach.');
-      } else {
-        downloadAnalyticsShareCard(shareBlob);
-        setShareStatus('Tweet opened. Share card downloaded for manual attach.');
-      }
+      setShareCardPreviewUrl((currentUrl) => {
+        if (currentUrl) {
+          URL.revokeObjectURL(currentUrl);
+        }
+        return nextPreviewUrl;
+      });
     } catch (err) {
       console.error('Failed to prepare analytics share card:', err);
-      setShareStatus('Tweet opened. The share card could not be prepared automatically.');
+      setShareCardError('Unable to generate the share card right now.');
     } finally {
-      setSharing(false);
+      setShareCardLoading(false);
     }
   };
+
+  const closeShareModal = () => {
+    setShareModalOpen(false);
+  };
+
+  const handleShareOverlayClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) {
+      closeShareModal();
+    }
+  };
+
+  const handleDownloadCard = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!shareCardPreviewUrl) {
+      event.preventDefault();
+    }
+  };
+
+  const handlePostToX = () => {
+    if (!shareSnapshot) {
+      return;
+    }
+
+    const shareWindow = window.open(tweetIntentUrl, '_blank', 'noopener,noreferrer');
+    if (!shareWindow) {
+      window.location.href = tweetIntentUrl;
+    }
+  };
+
+  useEffect(() => {
+    if (!shareModalOpen) {
+      return;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShareModalOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [shareModalOpen]);
 
   if (loading && !data) {
     return (
@@ -216,21 +230,19 @@ export const Analytics: React.FC = () => {
         
         <div className="flex flex-col gap-2 sm:items-end">
           <div className="flex flex-wrap items-center gap-2">
-            <a
-              href={tweetIntentUrl}
-              target="_blank"
-              rel="noreferrer"
-              onClick={handleShareToX}
-              aria-disabled={shareLoading || !shareSnapshot || sharing}
+            <button
+              type="button"
+              onClick={() => void openShareModal()}
+              disabled={shareLoading || !shareSnapshot}
               className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold uppercase tracking-wide transition-all ${
-                shareLoading || !shareSnapshot || sharing
-                  ? 'pointer-events-none border-slate-200 bg-slate-100 text-slate-400'
+                shareLoading || !shareSnapshot
+                  ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
                   : 'border-slate-900 bg-slate-900 text-white hover:bg-slate-800'
               }`}
             >
               <Share2 size={14} />
-              {sharing ? 'Preparing...' : 'Share to X'}
-            </a>
+              Share to X
+            </button>
 
             <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
               {(['1d', '7d', '30d'] as const).map((p) => (
@@ -246,10 +258,6 @@ export const Analytics: React.FC = () => {
               ))}
             </div>
           </div>
-
-          {shareStatus && (
-            <p className="text-xs text-slate-500">{shareStatus}</p>
-          )}
         </div>
       </div>
 
@@ -361,6 +369,90 @@ export const Analytics: React.FC = () => {
       {data?.totalCount !== 0 && (
         <div className="mt-10 border-t border-slate-100 pt-8">
           <NewAnalyticsSection data={data?.intelligence} />
+        </div>
+      )}
+
+      {shareModalOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4 py-6"
+          onClick={handleShareOverlayClick}
+        >
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Share Market Update</h3>
+                <p className="mt-1 text-sm text-slate-500">Download the image card, then use the prefilled X post.</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeShareModal}
+                className="rounded-full border border-slate-200 p-2 text-slate-500 transition-all hover:border-slate-300 hover:text-slate-900"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 px-5 py-5 sm:px-6 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="space-y-3">
+                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Image Card</div>
+                {shareCardPreviewUrl ? (
+                  <a
+                    href={shareCardPreviewUrl}
+                    download="domain-market-update-yesterday.png"
+                    onClick={handleDownloadCard}
+                    className="block overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 transition-all hover:border-slate-300"
+                  >
+                    <img
+                      src={shareCardPreviewUrl}
+                      alt="Domain Market Update share card"
+                      className="h-auto w-full"
+                    />
+                  </a>
+                ) : shareCardLoading ? (
+                  <div className="flex aspect-[16/9] items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-sm text-slate-500">
+                    Generating share card...
+                  </div>
+                ) : (
+                  <div className="flex aspect-[16/9] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-sm text-slate-500">
+                    {shareCardError || 'Share card unavailable.'}
+                  </div>
+                )}
+                <p className="text-xs text-slate-500">Click the image card to download it.</p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">X Post Content</div>
+                  <div className="mt-3 whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-700">
+                    {tweetText}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={handlePostToX}
+                    disabled={!shareSnapshot}
+                    className={`inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold uppercase tracking-wide transition-all ${
+                      shareSnapshot
+                        ? 'bg-slate-900 text-white hover:bg-slate-800'
+                        : 'cursor-not-allowed bg-slate-100 text-slate-400'
+                    }`}
+                  >
+                    <Share2 size={14} />
+                    Post on X
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeShareModal}
+                    className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition-all hover:border-slate-300 hover:text-slate-900"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
