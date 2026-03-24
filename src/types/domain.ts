@@ -13,6 +13,7 @@ export interface Domain {
 }
 
 export interface FilterState {
+  trendingOnly: boolean;
   tlds: string[];
   minLength: number;
   maxLength: number;

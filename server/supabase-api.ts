@@ -212,10 +212,20 @@ function normalizePeriod(period?: string) {
   return "7d";
 }
 
+function normalizeBooleanParam(value?: string) {
+  return value === "true" || value === "1";
+}
+
 function getPeriodDays(period: string) {
   if (period === "1d") return 1;
   if (period === "30d") return 30;
   return 7;
+}
+
+function getDateThresholdDaysAgo(days: number) {
+  const dateThreshold = new Date();
+  dateThreshold.setDate(dateThreshold.getDate() - days);
+  return dateThreshold.toISOString().split("T")[0];
 }
 
 function normalizeTldValue(value: string | null) {
@@ -284,6 +294,21 @@ async function computeFilteredKeywordStats(
   );
 }
 
+async function getTrendingExploreKeywords(supabase: ReturnType<typeof createClient>) {
+  return loadCachedData<string[]>(
+    `domains:trending-keywords:${ANALYTICS_CACHE_VERSION}`,
+    ANALYTICS_CACHE_TTL_MS,
+    async () => {
+      const keywords = await getTopKeywords(supabase, {
+        dateThreshold: getDateThresholdDaysAgo(7),
+        maxRows: 20,
+      });
+
+      return keywords.map((keyword) => keyword.name.trim().toLowerCase()).filter(Boolean);
+    },
+  );
+}
+
 export async function getDomainsResponse(params: URLSearchParams): Promise<ApiResponse> {
   try {
     const supabase = getSupabaseClient();
@@ -297,6 +322,7 @@ export async function getDomainsResponse(params: URLSearchParams): Promise<ApiRe
     const keywords = getStringParam(params, "keywords");
     const startsWith = getStringParam(params, "startsWith");
     const endsWith = getStringParam(params, "endsWith");
+    const trendingOnly = normalizeBooleanParam(getStringParam(params, "trending"));
     const sortBy = normalizeSortBy(getStringParam(params, "sortBy"));
     const sortOrder = normalizeSortOrder(getStringParam(params, "sortOrder"));
 
@@ -344,6 +370,14 @@ export async function getDomainsResponse(params: URLSearchParams): Promise<ApiRe
 
       if (keywordList.length > 0) {
         query = query.contains("keywords", keywordList);
+      }
+    }
+
+    if (trendingOnly) {
+      const trendingKeywords = await getTrendingExploreKeywords(supabase);
+
+      if (trendingKeywords.length > 0) {
+        query = query.overlaps("keywords", trendingKeywords);
       }
     }
 

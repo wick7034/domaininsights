@@ -23,6 +23,11 @@ export const Filters: React.FC<FiltersProps> = ({ filters, onFilterChange, tlds 
             
             {/* Quick Summary of active filters */}
             <div className="flex gap-2">
+              {filters.trendingOnly && (
+                <span className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-700">
+                  Trending
+                </span>
+              )}
               {filters.tlds.length > 0 && (
                 <span className="flex items-center gap-1 rounded-md bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700 uppercase">
                   {filters.tlds.length} TLDs
@@ -35,7 +40,16 @@ export const Filters: React.FC<FiltersProps> = ({ filters, onFilterChange, tlds 
               )}
               {filters.numbers !== 'any' && (
                 <span className="flex items-center gap-1 rounded-md bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700 uppercase">
-                  Nums: {filters.numbers}
+                  {filters.numbers === 'none'
+                    ? 'No Numbers'
+                    : filters.numbers === 'only'
+                      ? 'Only Numbers'
+                      : 'Has Numbers'}
+                </span>
+              )}
+              {filters.hyphens === 'exclude' && (
+                <span className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-700">
+                  No Hyphen
                 </span>
               )}
             </div>

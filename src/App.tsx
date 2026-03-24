@@ -14,6 +14,7 @@ type ExploreAnalyticsPreview = {
 };
 
 const INITIAL_FILTERS: FilterState = {
+  trendingOnly: false,
   tlds: [],
   minLength: 1,
   maxLength: 63,
@@ -99,6 +100,7 @@ export default function App() {
       params.append('page', currentPage.toString());
       params.append('limit', '100');
       
+      if (currentFilters.trendingOnly) params.append('trending', 'true');
       if (currentFilters.tlds.length > 0) params.append('tlds', currentFilters.tlds.join(','));
       params.append('minLength', currentFilters.minLength.toString());
       params.append('maxLength', currentFilters.maxLength.toString());
@@ -279,6 +281,58 @@ export default function App() {
                   </div>
                 </div>
               </button>
+            </div>
+
+            <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Quick Filters</div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Trending matches names containing the top 20 keywords from the last 7 days.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleFilterChange({ trendingOnly: !filters.trendingOnly })}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-all ${
+                      filters.trendingOnly
+                        ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                    }`}
+                  >
+                    <TrendingUp size={12} />
+                    Trending
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleFilterChange({ numbers: filters.numbers === 'none' ? 'any' : 'none' })}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-all ${
+                      filters.numbers === 'none'
+                        ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                    }`}
+                  >
+                    <Hash size={12} />
+                    No Numbers
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleFilterChange({ hyphens: filters.hyphens === 'exclude' ? 'include' : 'exclude' })}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-all ${
+                      filters.hyphens === 'exclude'
+                        ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                    }`}
+                  >
+                    <span className="text-sm leading-none">-</span>
+                    No Hyphen
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="sticky top-14 z-40 -mx-4 bg-white sm:-mx-6">
