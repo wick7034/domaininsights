@@ -32,7 +32,7 @@ const inFlightData = new Map<string, Promise<unknown>>();
 const TLD_CACHE_TTL_MS = 60 * 60 * 1000;
 const ANALYTICS_CACHE_TTL_MS = 5 * 60 * 1000;
 const API_BROWSER_CACHE_SECONDS = 60;
-const ANALYTICS_CACHE_VERSION = "v2";
+const ANALYTICS_CACHE_VERSION = "v3";
 
 function sanitizeEnvValue(value?: string) {
   if (!value) return "";
@@ -304,7 +304,9 @@ async function getTrendingExploreKeywords(supabase: ReturnType<typeof createClie
         maxRows: 20,
       });
 
-      return keywords.map((keyword) => keyword.name.trim().toLowerCase()).filter(Boolean);
+      return keywords
+        .map((keyword) => keyword.name.trim().toLowerCase())
+        .filter((keyword) => keyword.length >= 3);
     },
   );
 }

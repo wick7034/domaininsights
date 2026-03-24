@@ -78,6 +78,7 @@ const EMPTY_HEATMAP: HeatmapData = {
 };
 
 const PINNED_HEATMAP_TLDS = ["ai", "io"];
+const MIN_ANALYTICS_KEYWORD_LENGTH = 3;
 
 export const EMPTY_DOMAIN_INTELLIGENCE: DomainIntelligenceData = {
   trendingKeywords: [],
@@ -97,6 +98,10 @@ function normalizeCount(value: number | string | null | undefined) {
   const numericValue =
     typeof value === "number" ? value : Number.parseFloat(String(value ?? 0));
   return Number.isFinite(numericValue) ? numericValue : 0;
+}
+
+function isAnalyticsKeyword(name: string | null | undefined) {
+  return (name?.trim().length || 0) >= MIN_ANALYTICS_KEYWORD_LENGTH;
 }
 
 function normalizeRpcStats(rows: RpcStatRow[] | null | undefined, fallbackName = "unknown") {
@@ -163,10 +168,12 @@ export async function getTopKeywords(
   const rows = await callRpc<RpcStatRow>(supabase, "get_top_keywords", {
     date_threshold: dateThreshold,
     filter_tld: filterTld,
-    max_rows: maxRows,
+    max_rows: Math.max(maxRows * 3, maxRows),
   });
 
-  return normalizeRpcStats(rows, "unknown");
+  return normalizeRpcStats(rows, "unknown")
+    .filter((row) => isAnalyticsKeyword(row.name))
+    .slice(0, maxRows);
 }
 
 export async function getTldDistribution(
@@ -205,7 +212,7 @@ export async function getRisingKeywords(
   const rows = await callRpc<RisingKeywordRow>(supabase, "get_rising_keywords", {
     current_date_threshold: currentDateThreshold,
     previous_date_threshold: previousDateThreshold,
-    max_rows: maxRows,
+    max_rows: Math.max(maxRows * 3, maxRows),
   });
 
   return rows
@@ -215,7 +222,7 @@ export async function getRisingKeywords(
       previousValue: normalizeCount(row.previous_value),
       growthPercent: normalizeCount(row.growth_pct),
     }))
-    .filter((row) => row.name && row.currentValue > 0)
+    .filter((row) => isAnalyticsKeyword(row.name) && row.currentValue > 0)
     .sort((a, b) => b.growthPercent - a.growthPercent)
     .slice(0, maxRows);
 }
@@ -300,19 +307,21 @@ export async function getHeatmapData(
 ) {
   const rows = await callRpc<HeatmapCellRow>(supabase, "get_keyword_tld_heatmap", {
     date_threshold: dateThreshold,
-    keyword_limit: keywordLimit,
+    keyword_limit: Math.max(keywordLimit * 3, keywordLimit),
     tld_limit: tldLimit,
   });
 
-  if (rows.length === 0) {
+  const filteredRows = rows.filter((row) => isAnalyticsKeyword(row.keyword));
+
+  if (filteredRows.length === 0) {
     return EMPTY_HEATMAP;
   }
 
   const keywords = Array.from(
-    new Set(rows.map((row) => row.keyword?.trim()).filter(Boolean)),
-  ) as string[];
+    new Set(filteredRows.map((row) => row.keyword?.trim()).filter(isAnalyticsKeyword)),
+  ).slice(0, keywordLimit) as string[];
   const discoveredTlds = Array.from(
-    new Set(rows.map((row) => row.tld?.trim().toLowerCase()).filter(Boolean)),
+    new Set(filteredRows.map((row) => row.tld?.trim().toLowerCase()).filter(Boolean)),
   ) as string[];
   const tlds = [
     ...PINNED_HEATMAP_TLDS.filter((tld) => discoveredTlds.includes(tld)),
@@ -328,7 +337,7 @@ export async function getHeatmapData(
     });
   }
 
-  for (const cell of rows) {
+  for (const cell of filteredRows) {
     const keyword = cell.keyword?.trim();
     const tld = cell.tld?.trim();
     if (!keyword || !tld) {

@@ -42,7 +42,7 @@ export const Analytics: React.FC = () => {
         const params = new URLSearchParams();
         params.append('period', period);
         if (selectedTld) params.append('tld', selectedTld);
-        params.append('intelligenceVersion', '2');
+        params.append('intelligenceVersion', '3');
 
         const res = await fetch(`/api/analytics?${params.toString()}`);
         if (!res.ok) {

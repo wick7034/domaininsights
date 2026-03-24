@@ -1,5 +1,45 @@
 -- Additional analytics RPCs for the appended Domain Intelligence section.
--- Run these in Supabase SQL editor after the existing get_top_tlds/get_top_keywords functions.
+-- Run these in Supabase SQL editor to refresh the keyword-based functions as well.
+
+CREATE OR REPLACE FUNCTION get_top_keywords(
+  date_threshold TEXT,
+  filter_tld TEXT DEFAULT NULL,
+  max_rows INT DEFAULT 20
+)
+RETURNS TABLE(name TEXT, value BIGINT) AS $$
+BEGIN
+  RETURN QUERY
+  WITH stop_words AS (
+    SELECT UNNEST(ARRAY[
+      'the', 'in', 'is', 'co', 'as', 'to', 'and', 'get', 'at', 'an',
+      'de', 'my', 'on', 'of', 'a', 'for', 'with', 'by', 'it', 'or',
+      'me', 'do', 'be', 'la', 'no', 're', 'xn', 'us', 'so', 'en'
+    ]) AS word
+  ),
+  keyword_counts AS (
+    SELECT
+      LOWER(keyword) AS keyword,
+      COUNT(*)::BIGINT AS count
+    FROM domains,
+    LATERAL UNNEST(keywords) AS keyword
+    WHERE created_at >= date_threshold::date
+      AND (filter_tld IS NULL OR
+           LOWER(tld) = LOWER(filter_tld) OR
+           LOWER(tld) = LOWER('.' || filter_tld))
+      AND CHARACTER_LENGTH(keyword) > 2
+    GROUP BY 1
+  )
+  SELECT
+    keyword AS name,
+    count AS value
+  FROM keyword_counts
+  WHERE NOT EXISTS (
+    SELECT 1 FROM stop_words WHERE stop_words.word = keyword_counts.keyword
+  )
+  ORDER BY value DESC, name ASC
+  LIMIT max_rows;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION get_rising_keywords(
   current_date_threshold TEXT,
@@ -26,7 +66,7 @@ current_keywords AS (
   FROM domains,
   LATERAL UNNEST(keywords) AS keyword
   WHERE created_at >= current_date_threshold::date
-    AND CHARACTER_LENGTH(keyword) > 1
+    AND CHARACTER_LENGTH(keyword) > 2
   GROUP BY 1
 ),
 previous_keywords AS (
@@ -37,7 +77,7 @@ previous_keywords AS (
   LATERAL UNNEST(keywords) AS keyword
   WHERE created_at >= previous_date_threshold::date
     AND created_at < current_date_threshold::date
-    AND CHARACTER_LENGTH(keyword) > 1
+    AND CHARACTER_LENGTH(keyword) > 2
   GROUP BY 1
 ),
 combined AS (
@@ -157,6 +197,7 @@ normalized_domains AS (
   FROM domains,
   LATERAL UNNEST(keywords) AS keyword
   WHERE created_at >= date_threshold::date
+    AND CHARACTER_LENGTH(keyword) > 2
 ),
 aggregated_counts AS (
   SELECT
