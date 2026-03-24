@@ -66,6 +66,16 @@ const HEATMAP_THEME: SectionTheme = {
   barTo: "#ec4899",
 };
 
+const RISING_THEME: SectionTheme = {
+  shell: "border-amber-200 bg-gradient-to-br from-amber-50 via-white to-rose-50",
+  title: "text-amber-600",
+  chip: "bg-amber-500",
+  track: "bg-amber-100/80",
+  value: "text-amber-700",
+  barFrom: "#f59e0b",
+  barTo: "#f97316",
+};
+
 const QUALITY_ROW_GRADIENTS: Record<string, { from: string; to: string; chip: string; text: string }> = {
   brandable: {
     from: "#10b981",
@@ -169,11 +179,17 @@ function EmptyState({ label }: { label: string }) {
   return <div className="text-xs text-slate-400">{label}</div>;
 }
 
+function formatGrowth(value: number) {
+  const rounded = Number(value.toFixed(1));
+  return `${rounded > 0 ? "+" : ""}${rounded}%`;
+}
+
 export const NewAnalyticsSection: React.FC<NewAnalyticsSectionProps> = ({ data }) => {
   if (!data) {
     return null;
   }
 
+  const risingKeywords = data.risingKeywords || [];
   const tldDistribution = data.tldDistribution || [];
   const lengthBuckets = data.lengthBuckets || [];
   const qualityStats = data.qualityStats || [];
@@ -301,6 +317,59 @@ export const NewAnalyticsSection: React.FC<NewAnalyticsSectionProps> = ({ data }
           )}
         </SectionShell>
       </div>
+
+      <SectionShell title="Rising Keywords" theme={RISING_THEME}>
+        {risingKeywords.length === 0 ? (
+          <EmptyState label="No day-over-day keyword growth data yet." />
+        ) : (
+          <div className="space-y-3">
+            <div className="text-[11px] text-slate-500">
+              Top 20 keyword growth for yesterday versus the day before yesterday.
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+              {risingKeywords.slice(0, 20).map((item, index) => {
+                const accent = ROW_GRADIENTS[(index + 1) % ROW_GRADIENTS.length];
+
+                return (
+                  <div
+                    key={item.name}
+                    className="rounded-xl border border-white/80 bg-white/75 px-3 py-2.5 backdrop-blur-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`h-2 w-2 rounded-full ${accent.chip}`} />
+                          <span className="truncate text-sm font-semibold text-slate-900">{item.name}</span>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-500">
+                          <span>Yesterday {countFormatter.format(item.currentValue)}</span>
+                          <span className="text-slate-300">/</span>
+                          <span>Prev {countFormatter.format(item.previousValue)}</span>
+                        </div>
+                      </div>
+
+                      <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                        {formatGrowth(item.growthPercent)}
+                      </span>
+                    </div>
+
+                    <div className="mt-2">
+                      <MiniBar
+                        value={item.currentValue}
+                        maxValue={Math.max(item.currentValue, item.previousValue, 1)}
+                        startColor={accent.from}
+                        endColor={accent.to}
+                        trackClassName={RISING_THEME.track}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </SectionShell>
 
       <SectionShell title="Keyword + TLD Heatmap" theme={HEATMAP_THEME}>
         {!heatmap || heatmap.rows.length === 0 ? (

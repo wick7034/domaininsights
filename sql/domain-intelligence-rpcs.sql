@@ -44,7 +44,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION get_rising_keywords(
   current_date_threshold TEXT,
   previous_date_threshold TEXT,
-  max_rows INT DEFAULT 5
+  max_rows INT DEFAULT 20
 )
 RETURNS TABLE(
   name TEXT,
@@ -66,6 +66,7 @@ current_keywords AS (
   FROM domains,
   LATERAL UNNEST(keywords) AS keyword
   WHERE created_at >= current_date_threshold::date
+    AND created_at < (current_date_threshold::date + INTERVAL '1 day')
     AND CHARACTER_LENGTH(keyword) > 2
   GROUP BY 1
 ),

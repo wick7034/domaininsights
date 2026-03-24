@@ -202,7 +202,7 @@ export async function getRisingKeywords(
   {
     currentDateThreshold,
     previousDateThreshold,
-    maxRows = 5,
+    maxRows = 20,
   }: {
     currentDateThreshold: string;
     previousDateThreshold: string;
@@ -372,6 +372,7 @@ export async function getDomainIntelligenceData(
   const today = new Date();
   const todayThreshold = getDateString(today);
   const yesterdayThreshold = getDateString(subtractDays(today, 1));
+  const dayBeforeYesterdayThreshold = getDateString(subtractDays(today, 2));
 
   const [
     trendingKeywordsResult,
@@ -385,9 +386,9 @@ export async function getDomainIntelligenceData(
   ] = await Promise.allSettled([
     getTopKeywords(supabase, { dateThreshold, maxRows: 20 }),
     getRisingKeywords(supabase, {
-      currentDateThreshold: todayThreshold,
-      previousDateThreshold: yesterdayThreshold,
-      maxRows: 5,
+      currentDateThreshold: yesterdayThreshold,
+      previousDateThreshold: dayBeforeYesterdayThreshold,
+      maxRows: 20,
     }),
     getTldDistribution(supabase, { dateThreshold, maxRows: 10 }),
     getLengthBuckets(supabase, { dateThreshold }),

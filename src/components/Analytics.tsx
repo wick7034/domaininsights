@@ -42,7 +42,7 @@ export const Analytics: React.FC = () => {
         const params = new URLSearchParams();
         params.append('period', period);
         if (selectedTld) params.append('tld', selectedTld);
-        params.append('intelligenceVersion', '3');
+        params.append('intelligenceVersion', '4');
 
         const res = await fetch(`/api/analytics?${params.toString()}`);
         if (!res.ok) {
@@ -110,11 +110,17 @@ export const Analytics: React.FC = () => {
 
       {/* Stats Grid */}
       {data?.totalCount === 0 ? (
-        <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-center">
-          <Globe className="mb-2 text-slate-300" size={32} />
-          <p className="text-sm font-semibold text-slate-900">No data found</p>
-          <p className="text-xs text-slate-500">Try selecting a different TLD or a longer time period.</p>
-        </div>
+        <>
+          <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 text-center">
+            <Globe className="mb-2 text-slate-300" size={32} />
+            <p className="text-sm font-semibold text-slate-900">No data found</p>
+            <p className="text-xs text-slate-500">Try selecting a different TLD or a longer time period.</p>
+          </div>
+
+          <div className="mt-10 border-t border-slate-100 pt-8">
+            <NewAnalyticsSection data={data?.intelligence} />
+          </div>
+        </>
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -204,10 +210,13 @@ export const Analytics: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-10 border-t border-slate-100 pt-8">
-            <NewAnalyticsSection data={data?.intelligence} />
-          </div>
         </>
+      )}
+
+      {data?.totalCount !== 0 && (
+        <div className="mt-10 border-t border-slate-100 pt-8">
+          <NewAnalyticsSection data={data?.intelligence} />
+        </div>
       )}
     </div>
   );

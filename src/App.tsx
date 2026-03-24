@@ -144,7 +144,7 @@ export default function App() {
       setAnalyticsPreviewLoading(true);
 
       try {
-        const res = await fetch('/api/analytics?period=1d&previewVersion=3');
+        const res = await fetch('/api/analytics?period=1d&previewVersion=4');
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({ error: `Server error: ${res.status}` }));
           throw new Error(errorData.error || `Server error: ${res.status}`);
