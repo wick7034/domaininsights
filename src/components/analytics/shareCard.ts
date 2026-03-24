@@ -91,7 +91,7 @@ export function buildAnalyticsShareSnapshot(
 
 export function buildAnalyticsShareTweet(snapshot: AnalyticsShareSnapshot) {
   return [
-    "Explore trends , \uD83D\uDEA8 Domain Market Update (Yesterday)",
+    "\uD83D\uDEA8 Domain Market Update (Yesterday)",
     "",
     `\uD83D\uDCCA ${countFormatter.format(snapshot.totalDomains)} domains registered`,
     "",
